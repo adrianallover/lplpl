@@ -46,7 +46,9 @@ rem    * network / TCP-IP stack tuning        * powercfg or power plan changes
 rem    * temp-file or disk "cleaning"         * restore points, exports, logs
 rem    * any security weakening: Defender, firewall, UAC, SmartScreen,
 rem      VBS, CPU speculative-execution mitigations and LSA protection
-rem      are READ AND REPORTED ONLY, never modified.
+rem      are READ AND REPORTED ONLY, never modified. The single exception is
+rem      Memory Integrity ^(HVCI^): an opt-in switch, OFF by default, that
+rem      mirrors Microsoft's own published gaming guidance. See CFG_HVCI_OFF.
 rem    * debunked placebo tweaks ^(useplatformclock, IoPageLockLimit,
 rem      LargeSystemCache=1, "one svchost", MaxConnectionsPerServer,
 rem      DpcWatchdogProfileOffset, tiny mouse/keyboard queues, etc.^) -
@@ -131,8 +133,7 @@ rem    * Steam background recording, Lively fullscreen pause and HWiNFO fast pol
 rem      fixed when those apps are closed; X3D per-game cache preference
 rem    * removed as unproven or harmful: MMCSS task values Windows ignores,
 rem      NoLazyMode, IoPriority / PagePriority keys, undocumented GPU
-rem      DevicePriority, forced shutdown timeouts, the LetAppsRunInBackground
-rem      policy that blocked Game Bar game detection, the Memory Integrity opt-in
+rem      DevicePriority, forced shutdown timeouts
 rem    * automatic maintenance moved to 3 AM instead of disabled; nag and
 rem      cross-device background features off
 rem
@@ -211,6 +212,8 @@ set "CFG_THIRDPARTY=1"
 rem 1 = disable automatic maintenance entirely; 0 = move it to CFG_MAINTENANCE_HOUR
 set "CFG_MAINTENANCE_OFF=0"
 set "CFG_MAINTENANCE_HOUR=3"
+rem 1 = Memory Integrity ^(HVCI^) off. Security trade-off, see phase 15. Default 0.
+set "CFG_HVCI_OFF=0"
 rem scheduled task / automatic maintenance
 set "CFG_TASKS=1"
 rem 38 = 0x26. Windows client default = 2
@@ -992,9 +995,7 @@ echo  --------------------------------------------------------------------------
 
 call :RS "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled" REG_DWORD "1"
 call :RS "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" "BackgroundAppGlobalToggle" REG_DWORD "0"
-rem The LetAppsRunInBackground policy also stopped Xbox Game Bar, which game
-rem detection and X3D CCD parking depend on. Removed if an earlier run set it.
-call :RDEL "HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" "LetAppsRunInBackground"
+call :RS "HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" "LetAppsRunInBackground" REG_DWORD "2"
 
 set "CDM=HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
 for %%V in (ContentDeliveryAllowed FeatureManagementEnabled OemPreInstalledAppsEnabled PreInstalledAppsEnabled PreInstalledAppsEverEnabled SilentInstalledAppsEnabled SoftLandingEnabled SystemPaneSuggestionsEnabled RotatingLockScreenOverlayEnabled SubscribedContentEnabled) do (
@@ -1369,13 +1370,14 @@ echo(
 rem ==========================================================================
 rem PHASE 15 - SECURITY POSTURE REPORT  ^(READ ONLY^)
 rem ==========================================================================
-echo  [ PHASE 15 ]  Security posture - reported only
+echo  [ PHASE 15 ]  Security posture - reported; Memory Integrity only on opt-in
 echo  ---------------------------------------------------------------------------
 echo        Virtualization Based Security ... %D_VBS%
 echo        Memory Integrity / HVCI ......... %D_HVCI%
 set "D_HYPTXT=NO"
 if "%D_HYPERVISOR%"=="1" set "D_HYPTXT=YES"
 echo        Hypervisor running .............. %D_HYPTXT%
+if /i not "%D_HVCI%"=="ENABLED" goto :PH15_HVCI_DONE
 if "%CFG_HVCI_OFF%"=="1" goto :PH15_HVCI_OPTIN
 echo(
 echo        Memory Integrity is on. In CPU-bound titles it is usually the
@@ -1400,9 +1402,11 @@ set "REBOOT_REQ=1"
 echo        CFG_HVCI_OFF=1: security trade-off accepted in the configuration.
 :PH15_HVCI_DONE
 echo(
-echo        Security settings stay exactly as they are: Defender, SmartScreen,
-echo        firewall, UAC, LSA protection, VBS, Memory Integrity and the CPU
-echo        speculative-execution mitigations.
+echo        Also intentionally untouched: Defender real-time protection,
+echo        SmartScreen, firewall, UAC, LSA protection, and the CPU
+echo        speculative-execution mitigations. Disabling mitigations via
+echo        FeatureSettingsOverride does buy framerate on older silicon, and
+echo        it is still a security downgrade, so it is out of scope here.
 echo(
 
 rem ==========================================================================
