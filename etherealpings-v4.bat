@@ -44,7 +44,7 @@ rem   * LINK POWER SAVING OFF: EEE, green and idle modes on every vendor's own k
 rem     DMA coalescing off, idle power-down only while nobody uses the PC, NIC kept powered
 rem   * WI-FI AT FULL STRENGTH: transmit power and roaming back to the driver default on
 rem     every vendor, MIMO and U-APSD power save off, 5 GHz preferred only where its signal
-rem     is good, 20 MHz on 2.4 GHz, no hunting for other networks while connected
+rem     is good, 20 MHz on 2.4 GHz, no switching to other saved networks mid-game
 rem   * RECEIVE RING up to 2048 descriptors, oversized transmit ring back to default
 rem   * DSCP 46 for games - automatically withdrawn if this line drops marked packets
 rem   * BACKGROUND TRANSFERS CAPPED: Windows Update, Store and OneDrive, in fixed KB/s when
@@ -127,16 +127,17 @@ set "NQ_RX_MAX=1"
 rem  Explicit Congestion Notification for TCP flows.
 set "NQ_ECN=1"
 
-rem  Wired adapters: clear "Allow the computer to turn off this device". An idle NIC that powers
-rem  down - USB adapters especially - delays or drops the first packets after a quiet moment.
-set "NQ_NIC_POWER_OFF=1"
+rem  Wired adapters: clear "Allow the computer to turn off this device". It only matters for
+rem  sleep and an unplugged cable - idle power-down on a live link is handled per keyword
+rem  above - and it also turns Wake-on-LAN off. 1 = clear it anyway.
+set "NQ_NIC_POWER_OFF=0"
 
 rem  Intel I225 first revision linked at 2.5 Gbps: advertise 1 Gbps, Intel's own workaround
 rem  for the frame drops of that chip. Nothing happens on any other adapter.
 set "NQ_I225_1G=1"
 
 rem  Wi-Fi radio: MIMO and U-APSD power save off, vendor sleep modes off, and Windows stops
-rem  hunting for other networks while connected. Transmit power and roaming always return to
+rem  switching to other saved networks while connected. Transmit power and roaming always return to
 rem  the driver default.
 set "NQ_WIFI_TUNE=1"
 
@@ -159,7 +160,7 @@ rem  Stop the Windows location service on Wi-Fi PCs, so apps cannot trigger Wi-F
 rem  positioning. Apps lose location. Your FPS script may already turn it off.
 set "NQ_WIFI_LOCATION_OFF=0"
 
-rem  Diagnostics before any change, about 60 seconds: pings to the router, the first ISP hops
+rem  Diagnostics before the adapter changes, about 60 seconds: pings to the router, the first ISP hops
 rem  and three internet hosts at once, hop-by-hop loss, path MTU. Targets must be IPv4
 rem  addresses. Put your game server's IP in NQ_TRACE_TARGET to trace that route instead.
 set "NQ_PATH_TEST=1"
@@ -371,6 +372,7 @@ $ProgressPreference    = 'SilentlyContinue'
 
 $script:NQ_Applied = [int]$env:NQ_OK
 $script:NQ_Failed  = [int]$env:NQ_FAIL
+$script:NqFailBase = $script:NQ_Failed
 $script:NQ_Skipped = [int]$env:NQ_SKIP
 $script:NQ_Same    = 0
 $script:NQ_Warned  = 0
@@ -1307,7 +1309,11 @@ function Show-NqJitterFindings ($P) {
     if ($g -and ($g.Received -ge 20)) {
         $jLimit = 2; $pLimit = 10
         if ($P.ViaWifi) { $jLimit = 10; $pLimit = 50 }
-        if (($g.Jitter -gt $jLimit) -or ($g.P95 -gt $pLimit)) {
+        # Router ping replies run on spare router CPU; real local-link jitter shows up in every
+        # internet ping too, so the warning needs the internet targets to confirm it.
+        $inetJ = @($P.Targets | Where-Object { (-not $_.Excluded) -and ($_.Stats.Received -ge 20) } | ForEach-Object { [double]$_.Stats.Jitter })
+        $confirmed = ($inetJ.Count -eq 0) -or ((($inetJ | Measure-Object -Minimum).Minimum) -ge (0.7 * $g.Jitter))
+        if ($confirmed -and (($g.Jitter -gt $jLimit) -or ($g.P95 -gt $pLimit))) {
             Write-NqFinding 'WARN' ('Unstable link to the router: jitter ' + (Format-NqNum $g.Jitter) + ' ms, 95th-percentile ping ' + (Format-NqNum $g.P95) + ' ms (limits ' + $jLimit + ' / ' + $pLimit + ' ms) - the delay is added before your packets even leave the house')
         }
     }
@@ -1558,9 +1564,9 @@ function Get-NqLinkEvents ([int]$Days = 7, $Adapters = @()) {
 
     # Wi-Fi (Microsoft-Windows-WLAN-AutoConfig/Operational). 8003 = disconnected, 8002 =
     # connect failed, 11001 = association succeeded. ReasonCode is a WLAN_REASON_CODE;
-    # 0x38002-0x38014 (WLAN_REASON_CODE_MSM_CONNECT_BASE + 2..20: association and security
-    # failures/timeouts, roaming failure, driver disconnected, driver operation failure,
-    # disconnect timeout, no visible AP) are drops the user did not ask for. Only events of
+    # 0x38007-0x38014 and 0x38019 (WLAN_REASON_CODE_MSM_CONNECT_BASE + 7..20 and 25:
+    # association and security failures/timeouts, roaming failure, driver disconnected,
+    # driver operation failure, disconnect timeout, no visible AP; user cancel excluded) are drops the user did not ask for. Only events of
     # the physical Wi-Fi adapters count (not the Wi-Fi Direct / hotspot virtual adapter).
     $wifiGuids = @{}
     foreach ($a in @($Adapters)) {
@@ -1579,7 +1585,7 @@ function Get-NqLinkEvents ([int]$Days = 7, $Adapters = @()) {
         if (($wifiGuids.Count -gt 0) -and $guid -and (-not $wifiGuids.ContainsKey($guid))) { continue }
         $rc = 0
         if ($d['ReasonCode']) { try { $rc = [int64]$d['ReasonCode'] } catch { $rc = 0 } }
-        $unexpected = (($rc -ge 0x38002) -and ($rc -le 0x38014))
+        $unexpected = (($rc -ge 0x38007) -and ($rc -le 0x38014)) -or ($rc -eq 0x38019)
         if (($e.Id -eq 8003) -and $unexpected -and -not (& $nearPower $e.TimeCreated)) { $drops += $e.TimeCreated }
         elseif (($e.Id -eq 8002) -and $unexpected -and -not (& $nearPower $e.TimeCreated)) { $fails += $e.TimeCreated }
         elseif (($e.Id -eq 11001) -and ($e.TimeCreated -ge $cut24)) {
@@ -2035,7 +2041,8 @@ function Set-AdvDefault ($n, [string]$kw) {
 # the cores that also run the game. Any value that differs from the driver default goes back.
 $CpuKeys    = @('*InterruptModeration','ITR','IMR','*PacketCoalescing','*RscIPv4','*RscIPv6','*UdpRsc',
                 '*IPChecksumOffloadIPv4','*TCPChecksumOffloadIPv4','*TCPChecksumOffloadIPv6',
-                '*UDPChecksumOffloadIPv4','*UDPChecksumOffloadIPv6','*LsoV1IPv4','*LsoV2IPv4','*LsoV2IPv6')
+                '*UDPChecksumOffloadIPv4','*UDPChecksumOffloadIPv6','*TCPUDPChecksumOffloadIPv4','*TCPUDPChecksumOffloadIPv6',
+                '*LsoV1IPv4','*LsoV2IPv4','*LsoV2IPv6','*UsoIPv4','*UsoIPv6')
 # Receive queue and processor counts only come back when forced BELOW the default; a higher
 # count spreads receive work over more cores and is left as chosen.
 $CpuMinKeys = @('*NumRssQueues','*MaxRssProcessors')
@@ -2243,6 +2250,8 @@ function Set-TxRingDefault ($n) {
 function IsFastEthernet ($n) {
     if ([string]$n.InterfaceDescription -match 'Fast Ethernet|10/100(?!0)') { return $true }
     if ([string]$n.PnPDeviceID -match 'VID_0BDA&PID_8152|VID_0B95&PID_(7720|772A|772B|7E2B)') { return $true }
+    $sdp = $Cache[$n.Name]['*SpeedDuplex']
+    if ($sdp -and (@(ValidOf $sdp | Where-Object { $sv = 0; [int64]::TryParse([string]$_, [ref]$sv) -and ($sv -ge 6) }).Count -gt 0)) { return $false }
     foreach ($kw in @('*SpeedDuplex', 'ConnectionType', 'SpeedDuplex')) {
         $p = $Cache[$n.Name][$kw]
         if ((-not $p) -or (-not $p.ValidDisplayValues)) { continue }
@@ -2402,7 +2411,7 @@ public static class NqUdpProbe {
 
 # "Allow the computer to turn off this device to save power" is bit 0x8 of PnPCapabilities
 # (NDIS_DEVICE_DISABLE_PM) on the adapter's driver key; Set-NetAdapterPowerManagement cannot
-# change it. Only that bit is set, so Wake-on-LAN choices are left exactly as they were.
+# change it. Setting the bit also disables wake from this adapter (Wake-on-LAN).
 function Set-NicPower ($n) {
     $pm = Probe { Get-NetAdapterPowerManagement -Name $n.Name -ErrorAction Stop }
     $state = ''
@@ -2542,9 +2551,11 @@ foreach ($n in $Nics) {
                     $five = @($others | Where-Object { ($_.Ssid -eq $wi.Ssid) -and ((Get-NqBand $_.MHz) -ne '2.4') } | Sort-Object Rssi -Descending | Select-Object -First 1)
                     if ($five.Count -gt 0) {
                         if ($five[0].Rssi -ge -70) {
-                            Warn ($n.Name + ': your router''s 5 GHz network is in range at ' + $five[0].Rssi + ' dBm while this PC sits on 2.4 GHz - the preferred band is set to 5 GHz below')
+                            $tail = ' - pick the 5 GHz network, or keep NQ_WIFI_BAND = 5 so the driver prefers it'
+                            if ((Num 'NQ_WIFI_BAND' 0) -ge 5) { $tail = ' - the driver is set to prefer 5 GHz below' }
+                            Warn ($n.Name + ': your router''s 5 GHz network is in range at ' + $five[0].Rssi + ' dBm while this PC sits on 2.4 GHz' + $tail)
                             $flags++
-                        } else { Info ($n.Name + ': the router''s 5 GHz network only reaches ' + $five[0].Rssi + ' dBm here - 2.4 GHz is the steadier choice at this distance') }
+                        } elseif ($five[0].Rssi -lt -75) { Info ($n.Name + ': the router''s 5 GHz network only reaches ' + $five[0].Rssi + ' dBm here - 2.4 GHz is the steadier choice at this distance') }
                     }
                 }
                 $mine = @($wi.Bss | Where-Object { $_.Bssid -eq $wi.Bssid }) | Select-Object -First 1
@@ -2568,7 +2579,7 @@ foreach ($n in $Nics) {
             Warn ($n.Name + ': connected on 2.4 GHz - the most congested band; use 5 or 6 GHz if the router offers it')
             $flags++
             # Bluetooth shares 2.4 GHz, and combo cards share one antenna between the two radios.
-            $bt = @(Probe { Get-PnpDevice -Class Bluetooth -PresentOnly -Status OK -ErrorAction Stop })
+            $bt = @(Probe { Get-PnpDevice -Class Bluetooth -PresentOnly -Status OK -ErrorAction Stop } | Where-Object { $_ })
             if ($bt.Count -gt 0) {
                 Info ($n.Name + ': a Bluetooth radio is active - Bluetooth headsets and controllers share the 2.4 GHz band, and combo cards share one antenna, so the Wi-Fi link gets less airtime. On 5 or 6 GHz the two no longer collide')
             }
@@ -2711,7 +2722,9 @@ if ((Flag 'NQ_PATH_TEST') -and $route) {
     if ($secs -lt 15) { $secs = 15 }
     if ($secs -gt 120) { $secs = 120 }
     $gList = @(([string]$env:NQ_GAMES) -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    Info ('Measuring for about ' + ($secs + 30) + ' seconds - leave the network alone meanwhile')
+    $extra = 8
+    if (Flag 'NQ_LOAD_TEST') { $extra += 22 }
+    Info ('Measuring for about ' + ($secs + $extra) + ' seconds - leave the network alone meanwhile')
     try { $diag = Invoke-NqDiagnostics -Targets $ptList -TraceTarget $trT -Seconds $secs -LoadTest (Flag 'NQ_LOAD_TEST') -GameExes $gList }
     catch { Info ('Diagnostics stopped early: ' + $_.Exception.Message) }
     if ($diag -and $diag.Path) { $net = $diag.Path.Internet }
@@ -2724,6 +2737,7 @@ if ((Flag 'NQ_PATH_TEST') -and $route) {
 if ((Flag 'NQ_UDP_TEST') -and $route) {
     $ut = ([string]$env:NQ_UDP_TARGET).Trim()
     $tv = [int](Num 'NQ_DSCP_VALUE' 46)
+    if (($tv -lt 0) -or ($tv -gt 63)) { $tv = 46 }
     $ipOk = $null
     if ($ut -and (-not [Net.IPAddress]::TryParse($ut, [ref]$ipOk))) { $ut = '' }
     if (-not $ut) { Skip 'UDP loss test: NQ_UDP_TARGET must be an IP address' }
@@ -3001,27 +3015,36 @@ foreach ($n in $Nics) {
             Set-AdvIf $n 'LowPowerEnable' '0'
             Set-AdvIf $n 'LpsEn' '0'
         }
-        # Preferred band, by each vendor's own value. Skipped when this router's 5 GHz signal
-        # is too weak here: forcing a weak band raises loss instead of lowering it.
+        # Preferred band, by each vendor's own value, and only on evidence: 5 GHz is preferred
+        # when its signal here is -70 dBm or better and returned to the driver default below
+        # -75 dBm; in between, or when the signal cannot be seen, the setting is left alone.
+        # Forcing a weak band raises loss, and the gap keeps the choice from flipping each run.
         $bandPref = Num 'NQ_WIFI_BAND' 0
         if (($bandPref -eq 5) -or ($bandPref -eq 6)) {
             $bandKeys = [ordered]@{ 'RoamingPreferredBandType' = '2'; 'PreferBand' = '2'; 'PreferredBand' = '2'; 'StaPreferredBand' = '3' }
             $bk = $null
             foreach ($k in $bandKeys.Keys) { if ($Cache[$n.Name][$k]) { $bk = $k; break } }
-            $best5 = $null
+            if (-not $bk) { $bk = Find-Kw $n @() 'Preferred Band' }
+            $sig5 = $null
             if ($wi -and $wi.Loc -and $wi.Ssid) {
                 $best5 = @($wi.Bss | Where-Object { ($_.Ssid -eq $wi.Ssid) -and ((Get-NqBand $_.MHz) -ne '2.4') } | Sort-Object Rssi -Descending) | Select-Object -First 1
+                if ($best5) { $sig5 = [int]$best5.Rssi }
             }
-            if (-not $bk) {
-                $pb = Find-Kw $n @() 'Preferred Band'
-                if ($pb -and (-not ($best5 -and ($best5.Rssi -lt -72)))) { Set-AdvByText $n $pb '(?i)prefer.*5|5 ?G.*first' }
-            } elseif ($best5 -and ($best5.Rssi -lt -72)) {
-                Info ($n.Name + ': the 5 GHz network only reaches ' + $best5.Rssi + ' dBm here, so no band is forced')
+            if (($null -eq $sig5) -and $wi -and ((Get-NqBand $wi.MHz) -ne '2.4') -and ((Get-NqBand $wi.MHz) -ne '') -and ($null -ne $wi.Rssi)) { $sig5 = [int]$wi.Rssi }
+            if (-not $bk) { }
+            elseif ($null -eq $sig5) { Skip ($n.Name + ': the 5 GHz signal could not be seen here, so the band preference is left as it is') }
+            elseif ($sig5 -lt -75) {
+                Info ($n.Name + ': the 5 GHz network only reaches ' + $sig5 + ' dBm here, so no band is forced')
                 Set-AdvDefault $n $bk
-            } else {
+            } elseif ($sig5 -lt -70) { Same ($n.Name + ': 5 GHz at ' + $sig5 + ' dBm - band preference left as it is') }
+            elseif ($bandKeys.Contains($bk)) {
                 $bv = $bandKeys[$bk]
                 if (($bandPref -eq 6) -and ($bk -eq 'RoamingPreferredBandType') -and (@(ValidOf $Cache[$n.Name][$bk]) -contains '4')) { $bv = '4' }
                 Set-Adv $n $bk $bv
+            } else {
+                $pat = '(?i)prefer.*5|5 ?G.*first'
+                if (($bandPref -eq 6) -and (Test-Offers $n $bk '(?i)6 ?G')) { $pat = '(?i)prefer.*6|6 ?G' }
+                Set-AdvByText $n $bk $pat
             }
         }
         # 2.4 GHz only: a 40 MHz channel spans two-thirds of the band and picks up every
@@ -3062,7 +3085,7 @@ foreach ($n in $Nics) {
                         & ($env:NQ_BIN + '\netsh.exe') wlan set profileparameter ('name=' + $wi.Profile) ('interface=' + $n.Name) 'autoSwitch=no' | Out-Null
                         if ($LASTEXITCODE -ne 0) { throw ('NETSH returned exit code ' + $LASTEXITCODE) }
                     }
-                    Ok ($n.Name + ': Windows no longer searches for other networks while connected to "' + $wi.Profile + '"')
+                    Ok ($n.Name + ': Windows no longer switches away from "' + $wi.Profile + '" to other saved networks')
                 } catch { Failed ($n.Name + ': autoSwitch: ' + $_.Exception.Message) }
                 break
             }
@@ -3074,10 +3097,17 @@ foreach ($n in $Nics) {
 }
 
 # ------------------------------------------------------------------------------------------
-Head 'Receive Side Scaling (global)'
+Head 'Global offload engine: packet coalescing filter and Receive Side Scaling'
 # ------------------------------------------------------------------------------------------
 $g = Read-Nq 'Reading global offload settings' { Get-NetOffloadGlobalSetting }
 if ($g) {
+    # Adapter-level packet coalescing only works while this global filter is on.
+    if ([string]$g.PacketCoalescingFilter -ne 'Disabled') { Same 'Packet Coalescing Filter on' }
+    else {
+        Doing 'OFFLOAD' 'Setting PacketCoalescingFilter = Enabled'
+        try { Change { Set-NetOffloadGlobalSetting -PacketCoalescingFilter Enabled -ErrorAction Stop }; Ok 'Packet Coalescing Filter: off -> on (the NIC batches broadcast chatter instead of interrupting the CPU for each frame)' }
+        catch { Failed ('Packet Coalescing Filter: ' + $_.Exception.Message) }
+    }
     if ([string]$g.ReceiveSideScaling -eq 'Enabled') { Same 'Receive Side Scaling (global) on' }
     else {
         Doing 'OFFLOAD' 'Setting ReceiveSideScaling = Enabled'
@@ -3321,7 +3351,7 @@ if (-not (Get-Command New-NetQosPolicy -ErrorAction SilentlyContinue)) {
     if (($cap -le 0) -and ((Num 'NQ_UP_MBPS' 0) -gt 0)) { $cap = [int]((Num 'NQ_UP_MBPS' 0) * 600) }
     $markGames = (Flag 'NQ_DSCP')
     if ($markGames -and $script:NqEfDropped -and (Flag 'NQ_DSCP_AUTO')) {
-        Warn 'Game marking withdrawn: the UDP test above showed this connection dropping DSCP 46 packets. Unmarked game packets arrive more reliably here'
+        Warn ('Game marking withdrawn: the UDP test above showed this connection dropping DSCP ' + $dscp + ' packets. Unmarked game packets arrive more reliably here')
         $markGames = $false
     }
     if ($markGames)           { $plan += ,@([string]$env:NQ_GAMES,     'NQ-DSCP-',  $dscp,  [uint64]0, 'Both') }
@@ -3510,5 +3540,5 @@ finally {
     Say ('  [SUMMARY] Applied: ' + $script:NQ_Applied + '  Failed: ' + $script:NQ_Failed + '  Same: ' + $script:NQ_Same + '  Skipped: ' + $script:NQ_Skipped + '  Warnings: ' + $script:NQ_Warned)
     if ($script:NQ_Dry) { Say '  DRY RUN - nothing was changed. Applied counts what a real run would change.' }
 }
-if ($script:NQ_Failed -gt 0) { exit 1 }
+if ($script:NQ_Failed -gt $script:NqFailBase) { exit 1 }
 exit 0
