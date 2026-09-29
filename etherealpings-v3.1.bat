@@ -25,7 +25,7 @@ set "NQ_PS=%NQ_BIN%\WindowsPowerShell\v1.0\powershell.exe"
 set "NQ_OK=0"
 set "NQ_FAIL=0"
 set "NQ_SKIP=0"
-title NetLatency Tuner v3 - ping / jitter / packet loss / bufferbloat
+title NetLatency Tuner v3.1 - ping / jitter / packet loss / bufferbloat
 rem ASCII / CRLF, no BOM. CMD never executes the PowerShell payload below.
 rem The loader reads the payload as data; paths and application names are not code.
 rem In literal batch configuration, write %% to store a single percent sign.
@@ -34,8 +34,8 @@ rem ============================================================================
 rem  WHAT THIS CHANGES - each item has a measurable mechanism on current Windows 10 and 11:
 rem   * TCP/UDP stack: receive batching off, ECN on, HyStart and PRR loss recovery kept on
 rem   * MMCSS network throttling off, background Windows Update capped, update seeding off
-rem   * NIC drivers: power-saving and green modes off, interrupt moderation and packet
-rem     coalescing off, receive ring at the driver maximum, standard 1514-byte frames
+rem   * NIC drivers: power-saving and green modes off, packet coalescing off, interrupt
+rem     moderation at the driver default, receive ring at the driver maximum, 1514-byte frames
 rem   * wired adapters kept powered: no idle power-down, no wake-up delay on first packets
 rem   * Wi-Fi: MIMO power save and U-APSD off, roaming scans minimised, 5 GHz preferred,
 rem     transmit power at maximum, driver background-scan blocking where the driver has it
@@ -48,25 +48,23 @@ rem   * diagnosis of what software cannot fix: USB and 100 Mbps adapters, weak o
 rem     Wi-Fi, legacy Wi-Fi standards, forced duplex, frame errors, stale drivers,
 rem     VPN or Wi-Fi routing, Hyper-V switches, filter drivers, torrent seeding
 rem
-rem  v3 against v2:
+rem  v3.1 - diagnostics added in v3 (all read only, nothing is changed by them):
 rem   * path test: 30 timed pings to the router and 30 to an internet host show where loss
 rem     and jitter start - on the local link or beyond the router - before anything changes
 rem   * packet-loss counters read from Windows itself: NIC receive discards, UDP datagrams
 rem     dropped before reaching the game, and the TCP retransmission rate since boot
-rem   * Intel I225-V early steppings (B1/B2, known for link drops) and Wi-Fi Direct links
-rem     (Mobile Hotspot, Miracast) that split the Wi-Fi radio's airtime are flagged
-rem   * Ethernet is preferred over Wi-Fi whenever both are connected, by interface metric
-rem   * Wi-Fi: wireless mode restored to the highest standard the driver offers when an
-rem     old tweak capped it; roaming sensitivity lowered on Realtek and MediaTek drivers too;
-rem     location requests, which make Windows scan for Wi-Fi networks, stopped on Wi-Fi PCs
-rem   * wired: Adaptive Inter-Frame Spacing held off, the half-duplex collision workaround
-rem     that inserts gaps between frames
-rem   * frametime guard: interrupt moderation stays at the driver default on CPUs with fewer
-rem     than 6 threads, so extra network interrupts never compete with game threads there
+rem   * Intel I225-V early steppings (B1/B2, known for link drops), Wi-Fi Direct links
+rem     (Mobile Hotspot, Miracast) and Bluetooth sharing a 2.4 GHz radio are flagged
 rem   * repairs: CTCP, NewReno or DCTCP left on the internet TCP templates goes back to the
-rem     Windows default CUBIC; disabled Network Location Awareness, which QoS policies rely
-rem     on, is re-enabled
-rem   * 18 more games in the DSCP list
+rem     Windows default CUBIC; disabled Network Location Awareness is re-enabled
+rem
+rem  v3.1 - withdrawn after real-world testing showed more packet loss and lower FPS:
+rem   * interrupt moderation off: the one setting here with a CPU cost. It now goes back to
+rem     the driver default, so network interrupts stay batched and never steal frame time
+rem   * wireless mode rewrite, Realtek/MediaTek roaming sensitivity, wired Adaptive IFS,
+rem     Ethernet interface metric 10 and the 18 extra DSCP games from v3.0
+rem   * NQ_UNDO_V30 returns each of those to its driver or Windows default. Values that are
+rem     already at default report SAME, so the step is harmless on a PC that never ran v3.0
 rem
 rem  DELIBERATELY EXCLUDED - placebo, obsolete, unproven or harmful on current Windows:
 rem   * TcpWindowSize, GlobalMaxTcpWindowSize, TCPNoDelay, TTL and MaxUserPort tuning:
@@ -96,7 +94,7 @@ rem  Wi-Fi WMM honours the mark on the air - game packets win airtime contention
 rem  any router running SQM/CAKE diffserv or a DSCP-aware gaming-priority feature.
 rem  Minecraft Java runs as javaw.exe; add it only if you accept marking every Java program.
 rem  A listed game that is not installed costs nothing: its policy simply never matches.
-set "NQ_GAMES=cs2.exe;VALORANT-Win64-Shipping.exe;FortniteClient-Win64-Shipping.exe;r5apex.exe;r5apex_dx12.exe;cod.exe;Overwatch.exe;RainbowSix.exe;RainbowSix_Vulkan.exe;dota2.exe;League of Legends.exe;RocketLeague.exe;TslGame.exe;Marvel-Win64-Shipping.exe;Discovery.exe;EscapeFromTarkov.exe;destiny2.exe;RustClient.exe;HaloInfinite.exe;RobloxPlayerBeta.exe;Minecraft.Windows.exe;GTA5.exe;GTA5_Enhanced.exe;DeadByDaylight-Win64-Shipping.exe;Warframe.x64.exe;Wow.exe;ffxiv_dx11.exe;LostArk.exe;osu!.exe;deadlock.exe;tf_win64.exe;StreetFighter6.exe;Polaris-Win64-Shipping.exe;BF2042.exe;HuntGame.exe;aces.exe;WorldOfTanks.exe;SquadGame.exe;FallGuys_client_game.exe;GenshinImpact.exe;NarakaBladepoint.exe;Brawlhalla.exe;MK12.exe;HLL-Win64-Shipping.exe;DayZ_x64.exe;SoTGame.exe;Diablo IV.exe;eldenring.exe;MonsterHunterWilds.exe;helldivers2.exe;NewWorld.exe;BlackDesert64.exe;Gw2-64.exe;StarCitizen.exe;osclient.exe;ArmaReforgerSteam.exe;DeltaForceClient-Win64-Shipping.exe;PathOfExile.exe;PathOfExileSteam.exe;PathOfExile_x64Steam.exe"
+set "NQ_GAMES=cs2.exe;VALORANT-Win64-Shipping.exe;FortniteClient-Win64-Shipping.exe;r5apex.exe;r5apex_dx12.exe;cod.exe;Overwatch.exe;RainbowSix.exe;RainbowSix_Vulkan.exe;dota2.exe;League of Legends.exe;RocketLeague.exe;TslGame.exe;Marvel-Win64-Shipping.exe;Discovery.exe;EscapeFromTarkov.exe;destiny2.exe;RustClient.exe;HaloInfinite.exe;RobloxPlayerBeta.exe;Minecraft.Windows.exe;GTA5.exe;GTA5_Enhanced.exe;DeadByDaylight-Win64-Shipping.exe;Warframe.x64.exe;Wow.exe;ffxiv_dx11.exe;LostArk.exe;osu!.exe;deadlock.exe;tf_win64.exe;StreetFighter6.exe;Polaris-Win64-Shipping.exe;BF2042.exe;HuntGame.exe;aces.exe;WorldOfTanks.exe;SquadGame.exe;FallGuys_client_game.exe;GenshinImpact.exe;NarakaBladepoint.exe;Brawlhalla.exe"
 set "NQ_DSCP=1"
 rem  46 = Expedited Forwarding, the standard real-time class.
 set "NQ_DSCP_VALUE=46"
@@ -107,11 +105,10 @@ set "NQ_VOICE=Discord.exe;TeamSpeak.exe;ts3client_win64.exe;mumble.exe"
 set "NQ_DSCP_VOICE=1"
 set "NQ_VOICE_DSCP=34"
 
-rem  NIC interrupt moderation off: packets are handed to the stack immediately instead of
-rem  being batched by a timer. Extra interrupt cost only appears while saturating the link.
-rem  1 = off on CPUs with 6 or more threads, left at the driver default below that so network
-rem  interrupts never compete with game threads for frame time; 2 = always off; 0 = leave.
-set "NQ_INTMOD_OFF=1"
+rem  NIC interrupt moderation. 0 = driver default (batched interrupts), which keeps network
+rem  DPC work off the game threads. 1 = off: each packet interrupts the CPU immediately, a
+rem  fraction of a millisecond sooner, at a CPU cost that showed up as lower FPS in testing.
+set "NQ_INTMOD_OFF=0"
 
 rem  NIC receive ring raised to the driver maximum: bursts are absorbed instead of dropped.
 set "NQ_RX_MAX=1"
@@ -138,18 +135,15 @@ rem  Intel Wi-Fi roaming aggressiveness set to lowest: fewer roam scans, fewer s
 rem  Set to 0 if you use a MESH system and move between nodes while playing.
 set "NQ_WIFI_LOW_ROAM=1"
 
-rem  Wi-Fi wireless mode: restore the highest 802.11 standard the driver offers when an old
-rem  tweak capped it at 802.11n, b/g or similar. "Auto" settings are left alone.
-set "NQ_WIFI_MODE_FIX=1"
+rem  Undo v3.0: wireless mode, Realtek/MediaTek roaming sensitivity, wired Adaptive IFS and
+rem  interrupt moderation back to their driver defaults, and the Ethernet interface metric 10
+rem  back to automatic. Leave at 1; settings already at default report SAME.
+set "NQ_UNDO_V30=1"
 
 rem  On a PC whose internet traffic runs over Wi-Fi: stop the Windows location service. Each
 rem  location request - weather, maps, time zone - makes Windows scan for nearby Wi-Fi
 rem  networks, taking the radio off your channel. Apps lose location; set 0 to keep it.
 set "NQ_WIFI_LOCATION_OFF=1"
-
-rem  With Ethernet and Wi-Fi both connected, give Ethernet interface metric 10 so internet
-rem  traffic always takes the cable. Wi-Fi stays as the automatic fallback.
-set "NQ_PREFER_ETHERNET=1"
 
 rem  Path test before any change: 30 timed pings to the router and 30 to the host below.
 rem  Loss or jitter to the router = local link problem; only beyond it = modem, ISP or route.
@@ -355,9 +349,7 @@ $script:NQ_Skipped = [int]$env:NQ_SKIP
 $script:NQ_Same    = 0
 $script:NQ_Warned  = 0
 $script:NQ_Dry     = ([string]$env:NQ_DRYRUN -eq '1')
-$script:NqLp       = [Environment]::ProcessorCount
 $script:NqViaWifi  = $false
-$script:NqEthUp    = $false
 
 function Flag ([string]$n) { return ([Environment]::GetEnvironmentVariable($n) -eq '1') }
 function Num ([string]$n, [int]$fallback) {
@@ -521,18 +513,13 @@ function Test-Offers ($n, [string]$kw, [string]$pattern) {
     return (@($p.ValidDisplayValues | Where-Object { [string]$_ -match $pattern }).Count -gt 0)
 }
 
-# Scores the 802.11 standards named in a wireless-mode choice, so "802.11a/b/g/n/ac/ax"
-# outranks "802.11ac" and "Dual Band 802.11a/b/g" outranks "802.11b/g".
-function Get-WifiStdScore ([string]$text) {
-    $rank = @{ 'b' = 1; 'a' = 2; 'g' = 3; 'n' = 4; 'ac' = 5; 'ax' = 6; 'be' = 7 }
-    $score = 0
-    foreach ($m in [regex]::Matches($text, '(?i)802\.11\s*([a-z]+(?:\s*/\s*[a-z]+)*)')) {
-        foreach ($part in ($m.Groups[1].Value -split '/')) {
-            $k = $part.Trim().ToLowerInvariant()
-            if ($rank.ContainsKey($k)) { $score += $rank[$k] }
-        }
-    }
-    return $score
+# Returns a keyword to the value its driver ships with. Silent when the driver lacks it.
+function Set-AdvDefault ($n, [string]$kw) {
+    $p = $Cache[$n.Name][$kw]
+    if (-not $p) { return }
+    $def = [string]$p.DefaultRegistryValue
+    if (-not $def) { Skip ($n.Name + ': ' + $kw + ' has no driver default to return to'); return }
+    Set-Adv $n $kw $def
 }
 
 # 100 Mbps hardware: named Fast Ethernet, or a speed list that tops out at 100 Mbps.
@@ -718,7 +705,6 @@ if ($wifiUp) {
         $flags++
     }
 }
-$script:NqEthUp = $ethUp
 if ($wifiUp -and -not $ethUp) {
     Warn 'Gaming over Wi-Fi: airtime contention, retransmissions and periodic background scans are the #1 jitter/loss source. Ethernet or MoCA beats every tweak.'
     $flags++
@@ -873,11 +859,10 @@ foreach ($n in $Nics) {
 
     # Receive batching: every mechanism below holds packets to save CPU or power.
     Set-Adv $n '*PacketCoalescing' '0'
-    $imMode = Num 'NQ_INTMOD_OFF' 0
-    if (($imMode -ge 2) -or (($imMode -eq 1) -and ($script:NqLp -ge 6))) { Set-Adv $n '*InterruptModeration' '0' }
-    elseif (($imMode -eq 1) -and $Cache[$n.Name]['*InterruptModeration']) {
-        Skip ($n.Name + ': interrupt moderation left at the driver default on a ' + $script:NqLp + '-thread CPU, so extra network interrupts never compete with game threads for frame time')
-    }
+    # Interrupt moderation stays batched unless NQ_INTMOD_OFF is set: turning it off costs CPU
+    # time on the core that also runs game threads.
+    if (Flag 'NQ_INTMOD_OFF') { Set-Adv $n '*InterruptModeration' '0' }
+    elseif (Flag 'NQ_UNDO_V30') { Set-AdvDefault $n '*InterruptModeration' }
     $rsc = Probe { Get-NetAdapterRsc -Name $n.Name -ErrorAction Stop }
     if (-not $rsc) { Skip ($n.Name + ': the driver has no Receive Segment Coalescing to turn off') }
     elseif (-not ($rsc.IPv4Enabled -or $rsc.IPv6Enabled)) { Same 'Receive Segment Coalescing (adapter) off' }
@@ -900,9 +885,15 @@ foreach ($n in $Nics) {
     # support them are dropped silently.
     Set-AdvEdge $n '*JumboPacket'
 
-    # Adaptive Inter-Frame Spacing widens the gap between transmitted frames to ride out
-    # collisions, which only exist on half-duplex links. On full duplex it only adds delay.
-    if (-not $wifi) { Set-Adv $n 'AdaptiveIFS' '0' }
+    # Undo v3.0: settings it changed go back to the driver default. The adapter restart
+    # at the end of this section applies them together with everything else.
+    if (Flag 'NQ_UNDO_V30') {
+        if ($wifi) {
+            foreach ($up in @($Cache[$n.Name].Values | Where-Object { (([string]$_.DisplayName -match '(?i)wireless mode') -and ([string]$_.DisplayName -notmatch '(?i)ad ?hoc|ibss')) -or (([string]$_.DisplayName -match '(?i)roam(ing)?\s*sensitivity') -and ([string]$_.RegistryKeyword -ne 'RoamAggressiveness')) })) {
+                Set-AdvDefault $n ([string]$up.RegistryKeyword)
+            }
+        } else { Set-AdvDefault $n 'AdaptiveIFS' }
+    }
 
     if ($wifi -and (Flag 'NQ_WIFI_TUNE')) {
         # Spatial-multiplexing power save shuts down receive chains; waking them costs airtime.
@@ -930,35 +921,10 @@ foreach ($n in $Nics) {
             elseif ($bgMode -ge 2) { Set-AdvByText $n $bs 'Always' }
             else { Set-AdvByText $n $bs 'Good RSSI' }
         }
-        # Wireless mode capped by an old tweak at 802.11n, b/g or legacy-only: without 802.11ac
-        # and ax the link loses OFDMA scheduling and wide channels, and latency under load climbs.
-        if (Flag 'NQ_WIFI_MODE_FIX') {
-            foreach ($wm in @($Cache[$n.Name].Values | Where-Object { ([string]$_.DisplayName -match '(?i)wireless mode') -and ([string]$_.DisplayName -notmatch '(?i)ad ?hoc|ibss') })) {
-                $wd = @()
-                if ($wm.ValidDisplayValues) { $wd = @($wm.ValidDisplayValues) }
-                $wr = @(ValidOf $wm)
-                if ($wd.Count -eq 0) { continue }
-                $wCur = DispOf $wm ([string](@($wm.RegistryValue)[0]))
-                if ($wCur -match '(?i)auto') { Same ([string]$wm.DisplayName + ' = ' + $wCur); continue }
-                $best = -1; $bestRv = $null
-                for ($i = 0; ($i -lt $wd.Count) -and ($i -lt $wr.Count); $i++) {
-                    $sc = Get-WifiStdScore ([string]$wd[$i])
-                    if ($sc -gt $best) { $best = $sc; $bestRv = [string]$wr[$i] }
-                }
-                if (($null -eq $bestRv) -or ($best -le (Get-WifiStdScore $wCur))) { Same ([string]$wm.DisplayName + ' = ' + $wCur); continue }
-                Set-Adv $n ([string]$wm.RegistryKeyword) $bestRv
-            }
-        }
     }
     if ($wifi -and (Flag 'NQ_WIFI_LOW_ROAM')) {
         # Each roam-candidate scan takes the radio off-channel: classic 100-300 ms spike.
-        # Intel calls it Roaming Aggressiveness; Realtek and MediaTek call it Roaming Sensitivity.
-        $rk = Find-Kw $n @('RoamAggressiveness') '(?i)roam(ing)?\s*(aggressiveness|sensitivity)'
-        if (-not $rk) { Missing 'RoamAggressiveness' }
-        elseif ($rk -eq 'RoamAggressiveness') { Set-AdvEdge $n 'RoamAggressiveness' }
-        elseif (Test-Offers $n $rk '(?i)lowest') { Set-AdvByText $n $rk '(?i)lowest' }
-        elseif (Test-Offers $n $rk '(?i)^\s*(\d\.\s*)?low\b') { Set-AdvByText $n $rk '(?i)^\s*(\d\.\s*)?low\b' }
-        else { Skip ($n.Name + ': ' + $rk + ' offers no Low or Lowest setting') }
+        Set-AdvEdge $n 'RoamAggressiveness'
     }
     if ((-not $wifi) -and (Flag 'NQ_NIC_POWER_OFF')) { Set-NicPower $n }
     if ($script:NqMissing.Count -gt 0) {
@@ -1142,29 +1108,25 @@ foreach ($n in $Nics) {
 if (($fixed -eq 0) -and ($script:NQ_Failed -eq $undoFailCount)) { Same 'nothing harmful found' }
 
 # ------------------------------------------------------------------------------------------
-if (Flag 'NQ_PREFER_ETHERNET') {
-    Head 'Internet path: Ethernet over Wi-Fi'
-    if (-not ($script:NqViaWifi -and $script:NqEthUp)) {
-        Same 'internet traffic is not taking Wi-Fi while a cable is connected'
-    } else {
-        # A manual metric of 10 beats every automatic metric Windows gives Wi-Fi (25 and up),
-        # so the cable wins whenever it is connected and Wi-Fi takes over when it is not.
-        foreach ($n in @($Nics | Where-Object { (-not (IsWifi $_)) -and ($_.Status -eq 'Up') })) {
-            foreach ($af in @('IPv4', 'IPv6')) {
-                $ipi = Probe { Get-NetIPInterface -InterfaceIndex $n.ifIndex -AddressFamily $af -ErrorAction Stop }
-                if (-not $ipi) { continue }
-                if (([int]$ipi.InterfaceMetric -le 10) -and ([string]$ipi.AutomaticMetric -eq 'Disabled')) { Same ($n.Name + ': ' + $af + ' interface metric ' + $ipi.InterfaceMetric); continue }
-                Doing 'ROUTE' ($n.Name + ': ' + $af + ' interface metric ' + $ipi.InterfaceMetric + ' -> 10')
-                try {
-                    Change { Set-NetIPInterface -InterfaceIndex $n.ifIndex -AddressFamily $af -InterfaceMetric 10 -ErrorAction Stop }
-                    Ok ($n.Name + ': ' + $af + ' metric 10 - internet traffic takes the cable whenever it is connected')
-                } catch { Failed ($n.Name + ': ' + $af + ' interface metric: ' + $_.Exception.Message) }
-            }
+if (Flag 'NQ_UNDO_V30') {
+    Head 'Undo v3.0: interface metrics back to automatic'
+    # v3.0 pinned wired adapters to metric 10 with automatic metric off. Only that exact
+    # signature is reverted; Windows then ranks adapters by link speed again.
+    $mFixed = 0
+    foreach ($n in @($Nics | Where-Object { -not (IsWifi $_) })) {
+        foreach ($af in @('IPv4', 'IPv6')) {
+            $ipi = Probe { Get-NetIPInterface -InterfaceIndex $n.ifIndex -AddressFamily $af -ErrorAction Stop }
+            if ((-not $ipi) -or ([int]$ipi.InterfaceMetric -ne 10) -or ([string]$ipi.AutomaticMetric -ne 'Disabled')) { continue }
+            Doing 'ROUTE' ($n.Name + ': ' + $af + ' interface metric 10 -> automatic')
+            try {
+                Change { Set-NetIPInterface -InterfaceIndex $n.ifIndex -AddressFamily $af -AutomaticMetric Enabled -ErrorAction Stop }
+                Ok ($n.Name + ': ' + $af + ' automatic interface metric restored'); $mFixed++
+            } catch { Failed ($n.Name + ': ' + $af + ' interface metric: ' + $_.Exception.Message) }
         }
     }
+    if ($mFixed -eq 0) { Same 'no interface metric pinned by v3.0' }
 }
 
-# ------------------------------------------------------------------------------------------
 if (Flag 'NQ_WIFI_LOCATION_OFF') {
     Head 'Wi-Fi scans caused by location requests'
     if (-not $script:NqViaWifi) {
