@@ -1,155 +1,126 @@
-# AI Dungeon setup: Dynamic Large, second person, real dialogue, lethal fights
+# AI Dungeon instruction set (Dynamic Large, second person)
 
-You paste two fields and change four settings. The rest of this file explains why each line is there, which of your complaints it fixes, and how to check it in your own game.
+Built against your 14-point brief. The AI Instructions are 1,299 of your 1,300 characters. The Author's Note is short and universal.
 
 ## 1. Paste these
 
-**AI Instructions**: 1,295 characters, 269 tokens (`AI_INSTRUCTIONS.txt`)
+**AI Instructions** (`AI_INSTRUCTIONS.txt`)
 
 ```
-Second person, present tense: "you" is always the player's character; everyone else is third person.
-- Lines starting with > are the player's input: resolve exactly what was attempted, no more. Never write the player's words, choices, thoughts or emotions. Show the outcome and reactions, then stop where the player can act.
-- Narrate only what the player's character perceives; others' minds show only through words and actions.
-- Make who did and said what unmistakable: one speaker per paragraph, name speakers in groups, use names when a pronoun could fit two people. Never swap actions, speech, items or wounds between characters.
-- World Lore, Plot Essentials and past events are fact; names, looks, personalities, powers and relationships hold until the story changes them. Anyone matching an established character is that character; new characters never reuse a name.
-- NPCs pursue their own goals and know only what they've seen, heard or learned by role or power, never narrator-only facts; thoughts stay private without telepathy.
-- Positions, gear, clothes, wounds and time change only for a shown reason.
-- Outcomes follow established power and condition: a god's punch sends a mortal flying, broken or dead, never a stagger.
-- Gore, swearing and sex are fine where the story leads.
+"You" is the player's character, in present tense; everyone else is third person.
+Resolve each > line (player input) exactly as attempted, then stop where the player can act. Only the player decides what you say, do, think or intend.
+Narrate only what the player's character perceives. Others know only what they saw, heard or could know by role or power.
+Make who acts, speaks and is meant unmistakable: one speaker per paragraph, names over unclear pronouns. Actions, lines, items and wounds keep their owners.
+World Lore, Plot Essentials and past events are fact until the story changes them. Anyone matching an established character is that character; newcomers get names not yet in use.
+Readiness, injuries, fatigue, lingering sensations and damage carry forward and shape what follows; choices have lasting consequences.
+Damage, distance thrown and destruction scale with the established power behind each blow.
+When a fight happens, it's fast and clear: each exchange shows who moves where and what connects, flowing into the next, terrain used and broken.
+The world moves on its own, with good and bad luck. Agendas, moods and history drive real emotion and shifting tone, humor included; language fits the setting.
+Mature content of any kind is allowed where characters and situations lead.
 ```
 
-**Author's Note**: 529 characters, 112 tokens (`AUTHORS_NOTE.txt`)
+**Author's Note** (`AUTHORS_NOTE.txt`)
 
 ```
-NPCs talk plenty when they have reason to, like real people: casual, sometimes modern-sounding, each voice distinct, moods shifting with the moment through jokes, banter, irritation, swearing, awkwardness or tenderness. Fights are fast, brutal and potentially lethal; enemies fight to win and damage scales with each fighter's power. Tropes, bad luck and dreams grow from events. Narration stays lean: action and dialogue first, brief concrete details, no recaps or repeated phrasing. Every action and line is clearly attributed.
+Dialogue and action lead; narration stays brief. NPCs talk like real people: natural, modern-feeling rhythm and social cues, in words that fit the setting, each voice grounded in who they are and what just happened. Every action and line is clearly attributed.
 ```
 
-**Settings**
+**Settings:**
 
-| Setting | Value | Why |
-|---|---|---|
-| Model | Dynamic Large | |
-| Response length | 150 | Latitude's recommendation for Dynamic Large. At 100, fights get cut off mid-exchange. Much longer leaves the AI room to run past your turn and start acting for you. |
-| Third Person (Plot component) | Off | It replaces "You" in your Do and Say lines with a name, which breaks the rule that "you" is always the player's character. |
-| AI Instructions dropdown | Save as a reusable set | Scenarios bring their own instructions, which replace yours. A saved set (up to 5 sets, names up to 32 characters) can be selected in any adventure or scenario with one click. |
+- Model: Dynamic Large.
+- Response length: 150. That's Latitude's recommendation for Dynamic Large; longer outputs give the AI room to run past your turn.
+- Third Person plot component: off.
+- Save the instructions as a reusable set from the AI Instructions dropdown, so scenarios don't replace them.
 
-## 2. Why it's written this way
+## 2. How it's built
 
-Each turn, AI Dungeon sends the AI these pieces, in this order:
+What the AI receives each turn, in order:
 
 1. Your AI Instructions, as the system prompt
 2. Plot Essentials
-3. Triggered Story Cards, under a `World Lore:` header
-4. Story Summary
-5. Memory Bank
-6. Recent story
-7. The Author's Note, in square brackets
-8. Your newest action
+3. Story Cards, under `World Lore:`
+4. Story Summary and memories
+5. Recent story
+6. The Author's Note, in square brackets
+7. Your newest action
 
-Your Do and Say actions appear as lines starting with `>`. Every decision below follows from that layout.
+Your Do and Say inputs appear as lines starting with `>`. Every choice below follows from that layout and from your point 12.
 
-1. **It names what the AI actually sees.** "Lines starting with > are the player's input" tells the model exactly which text is you. That stops it from treating your lines as narration or handing your actions to someone else. "World Lore" is the label your Story Cards carry in the prompt.
-2. **Who did what gets concrete techniques, not a list of nouns.** One speaker per paragraph. Name the speakers in group scenes. Use names whenever "he" or "she" could mean two people. Never move actions, speech, items or wounds from one character to another.
-3. **Narration only covers what you can perceive.** Perspective mix-ups start when the AI narrates an NPC's private thoughts. The point of view slides, lines get pinned on the wrong person, and NPCs start "knowing" what only the narrator knew. Latitude's own example instructions for Dynamic Large say the same thing ("only write what is perceivable").
-4. **Story Cards stay canon without contradicting each other.**
-   - Card facts hold *until the story changes them*, so relationships can still grow, and wounds or deaths stick.
-   - Anyone who matches an established character *is* that character. The guard captain from your card shows up as her, not as a stranger with a new name.
-   - New characters never reuse an existing name.
-   - NPCs can know things through their role or powers, so oracles, gods and telepaths defined in your cards still work.
-5. **Scaling has a concrete example.** "A god's punch sends a mortal flying, broken or dead, never a stagger." The example deliberately mentions no walls. Models copy examples, and an example with walls tends to produce walls that weren't in the scene.
-6. **The Author's Note is short, and its order is deliberate.**
-   - It sits directly before your newest action, the most influential spot in the prompt. Latitude recommends keeping it to 3 or 4 sentences, because long notes there hurt coherence.
-   - It carries only what drifts fastest: dialogue voice, fight style and lean narration.
-   - It ends on attribution, so "every action and line is clearly attributed" is the last instruction the model reads before your action.
-   - Its dialogue line is scoped to NPCs, so asking for lots of dialogue doesn't invite the AI to write your lines.
-7. **Mature content is allowed but never pushed.** It sits in the instructions, limited by "where the story leads." It is not in the Author's Note, where it would be read right before your action on every turn.
+- **Principles, not lists (point 12).** Latitude's own guidance confirms your suspicion: whatever the instructions mention gets primed. So there are no personality types, mood lists or theme lists. Instead of naming comedy, tropes or gore, the instructions describe the *source* of variety: a world that moves on its own, luck in both directions, and emotion driven by agendas, moods and history. Variety then comes from the story rather than from a menu.
+- **None of your examples copied (point 4).** There are no blades, vomit or "hundreds of feet." The instructions state the general rules those examples are instances of:
+  - readiness, injuries, fatigue and lingering sensations carry forward and shape what follows
+  - damage, distance thrown and destruction scale with established power
+- **No category headers.** A "Combat:" heading raises combat's weight in every story, including ones that shouldn't have any (point 9). Plain lines keep every rule equal, and the fight line is conditional: "When a fight happens."
+- **Mature content in one neutral line (points 13–14).** There is no "sex" keyword and no talk of "balance" or "care," which you've seen make stories revolve around it. The line grants permission and names the trigger: characters and situations.
+- **Words that would leak are avoided.** Instruction vocabulary shows up in the prose, so there are no style adjectives like brutal, visceral or gritty. There's also no "beat," which the AI already overuses as "a beat passes."
+- **"You" means one thing only.** The instructions never address the AI as "you." In every line, "you" means the player's character, which removes one source of perspective mix-ups.
+- **The Author's Note carries only what every story needs:**
+  - dialogue and action first
+  - human-sounding speech
+  - attribution
+  It is read right before every action. Anything else in it, such as fights, sex or a list of moods, would be pushed into every scene. It ends on "Every action and line is clearly attributed," which is the last instruction before your input.
 
-### What changed from the previous (v51) pair
+## 3. Your 14 points, line by line
 
-| Problem in v51 | Fix here |
-|---|---|
-| "Preserve identity, speaker, referent, ownership, location, posture, grip, readied gear…" is a 13-item list. It says what to care about, not how. | Concrete rules: one speaker per paragraph, names instead of ambiguous pronouns, never swap actions, speech, items or wounds |
-| Never mentions the `>` input lines or World Lore | Both named explicitly |
-| No rule that someone matching a card *is* that character. A card character who shows up by title alone ("the watch captain") can be treated as a new person and given a new name. | "Anyone matching an established character is that character" |
-| "Established means" is the only allowance for special knowledge | Role and power named explicitly, plus a telepathy exception for private thoughts |
-| Rules overfitted to single test failures ("Preserve stated geometry; insert no extra obstacle or collision", "surroundings take remaining force") | Removed. The general continuity and scaling rules cover these cases. |
-| No perspective limit, so narration drifted into NPCs' heads | "Narrate only what the player's character perceives" |
-| Author's Note: 847 characters in three paragraphs, sex and gore words read every turn, ending on "leave the next voluntary choice to the player" | 529 characters in one paragraph, ending on attribution. Mature content moved to the conditional instruction line. |
-| "Fit diction … to setting" fought your "sometimes modern" dialogue | Dropped. Dialogue is "casual, sometimes modern-sounding." |
+Lines are numbered as they appear in the AI Instructions (1–10); AN = Author's Note.
 
-The size is about the same: 381 Llama-3 tokens in total, versus 405 before. That's roughly a tenth of a 4k free-tier context.
+| # | Point | Where it lives |
+|---|---|---|
+| 1 | All themes, a real active world, long-term consequences | Line 9 (world moves on its own, good and bad luck, shifting tone); line 6 (lasting consequences); line 10 |
+| 2 | Who knows what; who is acting, speaking, being referred to | Lines 1, 3, 4; AN's last sentence |
+| 3 | Combat choreography, consistency, impact | Line 8 (who moves where, what connects); line 4 (ownership); lines 6–7 |
+| 4 | Chains of logic and consequence; strength scaling | Line 6 (readiness, injuries, fatigue, lingering sensations); line 7 (damage, distance, destruction) |
+| 5 | No names shared with Story Cards | Line 5: newcomers get names not yet in use; card matches stay that character |
+| 6 | Setting-appropriate language | Line 9; AN ("words that fit the setting") |
+| 7 | Atmosphere not stagnant, humor | Line 9 |
+| 8 | Human dialogue, social cues, real and contextual emotion, no forced personalities | Line 9 (emotion driven by agendas, moods, history); AN (rhythm, social cues, voices grounded in who they are and what just happened) |
+| 9 | Fast, momentum-driven, scaled, environmental fights, only when the story calls for them | Line 8 (conditional), line 7; the per-story line below |
+| 10–11 | Dialogue and action over description and prose | AN's first sentence |
+| 12 | No priming | The whole design (section 2) |
+| 13–14 | Sex, gore, swearing allowed, never pushed | Line 10 |
 
-## 3. Where each of your preferences lives
+The baseline rules are lines 1, 2 and 5: second person, your control over your character, and Story Cards as canon.
 
-| Your preference | Covered by |
-|---|---|
-| Second person, present tense for you; NPCs in third person | Instructions, line 1 |
-| The AI never speaks, chooses, thinks or feels for you | Line 2 |
-| Your input carried out exactly ("once", "don't", counts) | Line 2 |
-| The outcome is finished, then control returns to you | Line 2 |
-| Who did what and who said what | Line 4, plus the Author's Note's last sentence |
-| No perspective drift | Line 3 |
-| Consistency with Story Cards and Plot Essentials | Line 5 |
-| No merged identities or reused names | Lines 4 and 5 |
-| NPCs don't know what they couldn't know | Line 6 |
-| NPCs pursue their own goals | Line 6 |
-| Consistency with what has happened | Lines 5 and 7 |
-| Scaling ("a god punches him") | Line 8, plus the Author's Note |
-| Fast, terse, dangerous fights | Author's Note |
-| Lots of natural dialogue with range: comedy, irritation, casual, modern-sounding, tender | Author's Note |
-| Less description | Author's Note ("lean … brief concrete details") |
-| Tropes, bad luck, dreams | Author's Note |
-| Mature content follows the story and is never forced | Line 9 |
+## 4. Telling the AI what kind of story it is (point 9)
 
-## 4. Make your Story Cards and Plot Essentials do their part
+The AI can't tell whether a story should center on combat, romance or comedy unless it's told. Give each adventure one short line at the **start** of the Author's Note, and keep the rest as is. For example:
 
-No wording can make the AI obey a card it can't see, and on the free tier space is tight. These habits matter as much as the instructions do:
+- `War story in a collapsing empire; fights are frequent.`
+- `Small-town slice of life; violence is rare and shocking.`
+- `Brothel-district noir; crude humor and sex are part of daily life.`
 
-- **Put the name inside the Entry.** The AI sees only the Entry text, never the card's title.
-- **Use every name the story calls them by as a trigger:** name, surname, nickname and title ("Brannoc, Hale, Captain, commander"). A card loads only when one of its triggers appears in the last few actions.
-- **Give power a concrete line.** Scaling can only follow power that has been *established*. For example: "Power: divine; a casual punch kills a mortal."
-- **Spell out what each character knows:** "Knows: … / Does not know: …"
-- **Keep your own character in Plot Essentials, not a card.** Plot Essentials are always sent; cards are not.
+This line is the dial. The instructions stay neutral so they work for any story.
 
-Plot Essentials template:
+## 5. Make Story Cards and Plot Essentials do their part
 
-```
-You are [name], [one-line identity]. Power: [ordinary human / trained fighter / demigod...]; [what a full-strength blow from you does]. Carrying: [items and where]. Injuries: [current]. Secrets no one knows: [...].
-```
+- **Put the name inside the Entry.** The AI only sees the Entry text, never the card's title.
+- **Triggers:** use every way the story refers to someone: name, surname, nickname, title.
+- **Give power a concrete line** ("Strength: divine, far beyond any mortal"). Scaling follows *established* power.
+- **Write knowledge explicitly:** "Knows: … / Does not know: …"
+- **Keep your character in Plot Essentials.** Plot Essentials are always sent; cards only load when triggered.
 
 Character card Entry template:
 
 ```
-[Full name] ([aliases]): [gender, age, role]. Looks: [2-3 details]. Voice: [how they talk: blunt, swears, dry jokes...]. Power: [level + concrete example]. Wants: [goal]. Knows: [...]. Does not know: [...]. With you: [relationship].
+[Full name] ([aliases]): [gender, age, role]. Looks: [2-3 details]. Voice: [how they talk]. Power: [level + concrete example]. Wants: [goal]. Knows: [...]. Does not know: [...]. With you: [relationship].
 ```
 
-## 5. Play habits that matter more than any wording
+## 6. Habits that matter as much as the wording
 
-- **Fix errors immediately** with Retry or Edit. The rules tell the AI that the story so far is fact, so a misattributed line left in place becomes canon and gets copied forward.
-- **Use Say for your speech and Do for your actions.** Both arrive as `>` lines, which is how the AI tells you apart from everyone else.
-- **Use Story mode when you want something to *happen*,** such as an NPC's move or a scene cut. The AI treats it as fact, not as your attempt.
-- **In long adventures,** turn on the Memory System and keep Plot Essentials current (injuries, who holds the key).
+- **Fix mistakes right away** with Retry or Edit. The instructions make past events fact, so an error left in becomes canon.
+- **Use Say for your speech and Do for your actions.** Both become `>` lines, which is how the AI tells you apart from everyone else.
+- **Use Story mode** for things you want to simply happen.
 
-## 6. Limits
+## 7. Testing
 
-- Dynamic Large switches between several models, so how well it follows the rules varies from one generation to the next. Expect an occasional miss, and Retry it.
-- If a card isn't triggered, or an event has scrolled out of context, the AI can't use it. See section 4.
-- **This version has not been run live yet.** The environment it was built in blocks aidungeon.com and huggingface.co. `TEST_KIT.md` is a ready-made 8-action test you can run in your own game. `BROWSER_TEST_PROMPT.md` hands that same test to the Claude in Chrome side panel, which runs it and sends back a word-for-word report.
-
-## 7. Optional tweaks
-
-- **Want the AI to describe your character's emotions?** In line 2, change "Never write the player's words, choices, thoughts or emotions." to "Never write the player's words, choices or thoughts."
-- **Per-story genre or tone:** add one short sentence at the **start** of the Author's Note (for example, "Grimdark border fantasy."). Keep the rest, and keep the attribution sentence last.
+This version hasn't been run live yet, and this Claude Code session has no browser access. `BROWSER_TEST_PROMPT.md` gives the Claude in Chrome side panel a ready-made test: it builds the `TEST_KIT.md` scene in your AI Dungeon tab, runs 8 inputs with 2 samples each, and copies everything back word for word. Paste the report into the Claude Code session to get a revised version and the next round.
 
 ## Sources
 
 - [What goes into the Context sent to the AI?](https://help.aidungeon.com/faq/what-goes-into-the-context-sent-to-the-ai)
-- [How are AI responses generated?](https://help.aidungeon.com/faq/how-are-ai-responses-generated) (context order; instructions sent as the system prompt)
-- [What is Author's Note?](https://help.aidungeon.com/faq/what-is-the-authors-note) (square brackets; placed just before your last action; 3 or 4 sentences)
-- [What is AI Instructions?](https://help.aidungeon.com/faq/ai-instructions)
-- [AI Models and their Differences](https://help.aidungeon.com/ai-model-differences) (Dynamic Large example instructions and response length 150; Wayfarer Large notes on `>` inputs and avoiding "dungeon master" wording)
-- [What are Story Cards?](https://help.aidungeon.com/faq/story-cards) (trigger scanning)
-- [What are Plot Components?](https://help.aidungeon.com/faq/plot-components) (Third Person component)
-- [AI Dungeon Story Cards (2026)](https://arcanumrpgs.com/blog/ai-dungeon-story-cards/) (the `World Lore:` header; the AI sees the Entry, never the card title)
-- [Memberships & Benefits](https://help.aidungeon.com/memberships-benefits) (context size by tier)
-- [What's New](https://play.aidungeon.com/whats-new) (reusable AI Instruction sets)
+- [How are AI responses generated?](https://help.aidungeon.com/faq/how-are-ai-responses-generated)
+- [What is Author's Note?](https://help.aidungeon.com/faq/what-is-the-authors-note)
+- [What is AI Instructions?](https://help.aidungeon.com/faq/ai-instructions) (positive phrasing; mentioned things get primed)
+- [AI Models and their Differences](https://help.aidungeon.com/ai-model-differences) (Dynamic Large, response length 150, `>` inputs)
+- [What are Story Cards?](https://help.aidungeon.com/faq/story-cards)
+- [AI Dungeon Story Cards (2026)](https://arcanumrpgs.com/blog/ai-dungeon-story-cards/) (`World Lore:` header; only the Entry is seen)
