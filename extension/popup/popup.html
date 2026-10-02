@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HideSeek Joiner</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">👀</div>
+    <div>
+      <h1>HideSeek Joiner</h1>
+      <p class="sub">Find a player, jump into their server.</p>
+    </div>
+  </header>
+
+  <form id="form" autocomplete="off">
+    <input id="username" type="text" placeholder="Roblox username…" spellcheck="false" autofocus />
+    <button id="go" type="submit">Find</button>
+  </form>
+
+  <section id="result" hidden>
+    <div class="card">
+      <img id="avatar" alt="" />
+      <div class="who">
+        <div id="display" class="display"></div>
+        <div id="handle" class="handle"></div>
+        <span id="pill" class="pill"></span>
+      </div>
+    </div>
+    <p id="game" class="game"></p>
+    <p id="note" class="note"></p>
+    <div class="actions">
+      <button id="join" class="primary" hidden>▶ Join game</button>
+      <button id="copy" class="ghost" hidden>Copy link</button>
+      <button id="watch" class="ghost">🔔 Notify me</button>
+    </div>
+  </section>
+
+  <p id="error" class="error" hidden></p>
+
+  <section id="recentWrap" hidden>
+    <h2>Recent</h2>
+    <div id="recent" class="chips"></div>
+  </section>
+
+  <section id="watchWrap" hidden>
+    <h2>Watching</h2>
+    <div id="watching" class="chips"></div>
+  </section>
+
+  <footer>Needs you logged in at roblox.com · respects each player's privacy settings</footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
