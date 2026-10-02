@@ -134,7 +134,7 @@ Character card Entry template:
 
 - Dynamic Large switches between several models, so how well it follows the rules varies from one generation to the next. Expect an occasional miss, and Retry it.
 - If a card isn't triggered, or an event has scrolled out of context, the AI can't use it. See section 4.
-- **This version has not been run live yet.** The environment it was built in blocks aidungeon.com and huggingface.co. `TEST_KIT.md` is a ready-made 8-action test you can run in your own game.
+- **This version has not been run live yet.** The environment it was built in blocks aidungeon.com and huggingface.co. `TEST_KIT.md` is a ready-made 8-action test you can run in your own game. `BROWSER_TEST_PROMPT.md` hands that same test to the Claude in Chrome side panel, which runs it and sends back a word-for-word report.
 
 ## 7. Optional tweaks
 
